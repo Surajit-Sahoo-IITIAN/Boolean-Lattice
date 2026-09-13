@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>From Power Set to Boolean Lattice</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;color:#24324a;background:linear-gradient(135deg,#f7f9ff,#fff,#f8f5ff)}
+header{background:#fff;border-bottom:1px solid #d9e2f2;padding:24px}header>div,main{max-width:1200px;margin:auto}
+.k{color:#7250d9;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.8rem}h1{margin:5px 0;font-size:2rem}.sub{color:#68758b}
+main{padding:20px}.bar,.card{background:#fff;border:1px solid #d9e2f2;border-radius:16px;box-shadow:0 8px 25px #2a406e12}
+.bar{padding:14px;display:flex;gap:9px;flex-wrap:wrap;align-items:center}.bar label{font-weight:700}
+select,button{font:inherit;padding:9px 12px;border:1px solid #cbd7eb;border-radius:9px;background:#fff;color:#24324a}button{font-weight:700;cursor:pointer}button.primary{background:#7250d9;color:#fff;border-color:#7250d9}button:disabled{opacity:.4}
+.steps{display:flex;gap:7px;margin:14px 0;overflow:auto}.step{min-width:120px;flex:1;padding:9px;border:1px solid #d9e2f2;border-radius:10px;text-align:center;color:#68758b;font-size:.82rem;font-weight:700}.step.on{background:#f1edff;color:#5a3bb8;border-color:#7250d9}
+.card{padding:20px}.badge{display:inline-block;background:#eef3ff;color:#2f5fd0;border-radius:99px;padding:5px 9px;font-weight:800;font-size:.8rem}h2{margin:10px 0 7px}.text{color:#526078;line-height:1.55}.math{font:1.1rem Georgia,serif;background:#f7f9fd;border:1px solid #e2e8f5;padding:13px;border-radius:10px;margin:12px 0}.call{border-left:4px solid #7250d9;background:#f5f1ff;padding:12px 14px;border-radius:0 9px 9px 0;margin-top:12px}
+.sets{display:flex;flex-wrap:wrap;gap:8px}.set{padding:8px 11px;border:1px solid #ccd7eb;border-radius:9px;font:700 1rem Georgia,serif}
+.graph{height:500px;border:1px solid #d9e2f2;border-radius:14px;background:radial-gradient(circle,#fff,#f5f7fc);overflow:hidden}.graph svg{width:100%;height:100%}.edge{stroke:#9aa8bf;stroke-width:2.2;fill:none}.trans{stroke:#9aa8bf;stroke-dasharray:7 6;opacity:.85}.selfloop{stroke:#7250d9;stroke-width:3;fill:none}.cover{stroke:#2f5fd0;stroke-width:3}.node{cursor:pointer}.node circle{fill:#eaf0ff;stroke:#2f5fd0;stroke-width:2}.node.sel circle{fill:#dcf6e8;stroke:#48a878;stroke-width:3}.node text{text-anchor:middle;dominant-baseline:middle;font-size:14px;font-weight:800;fill:#253a69}.actions{margin-top:14px;display:flex;gap:9px}.status{margin-top:10px;font-weight:800;color:#5a3bb8}
+@media(max-width:700px){.graph{height:430px}h1{font-size:1.55rem}}
+
+.levels{display:grid;gap:9px;margin:14px 0}.level{display:flex;gap:14px;align-items:center;padding:10px 12px;border:1px solid #d9e2f2;border-radius:10px;background:#fbfcff}.level>b{min-width:75px;color:#5a3bb8}.level span{display:inline-block;margin-right:12px;font-family:Georgia,serif;font-weight:700}.term-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:15px 0}.term{border:1px solid #d9e2f2;border-radius:13px;padding:14px;background:#fbfcff}.term b{display:block;color:#5a3bb8;margin-bottom:7px}.term span{display:block;font:700 1.25rem Georgia,serif;margin-bottom:5px}.term small{color:#68758b}@media(max-width:700px){.term-grid{grid-template-columns:1fr}.level{display:block}.level>b{display:block;margin-bottom:5px}}
+</style>
+</head>
+<body>
+<header><div><div class="k">Discrete Mathematics &amp; Graph Theory</div><h1>From Power Set to Boolean Lattice</h1><div class="sub">Interactive exploration of B<sub>n</sub> = (2<sup>[n]</sup>, ⊆)</div></div></header>
+<main>
+<div class="bar"><label>Choose:</label><select id="n"><option value="1">B₁</option><option value="2">B₂</option><option value="3" selected>B₃</option><option value="4">B₄</option></select><button class="primary" id="restart">Restart</button><button id="prev">← Previous</button><button id="next">Next →</button></div>
+<div class="steps" id="steps"></div><div id="app"></div>
+</main>
+<script>
+const stages=["1. Start with the set","2. Generate the power set","3. Arrange subsets by size","4. Build layer by layer","5. Remove self-loops","6. Remove transitive relations","7. Complete the Hasse diagram","8. Explore poset terminology"];
+let n=3,stage=0,layer=0,selected=[];
+const $=id=>document.getElementById(id);
+function subs(n){let a=[];for(let m=0;m<(1<<n);m++){let z=[];for(let i=0;i<n;i++)if(m>>i&1)z.push(i+1);a.push({m,a:z})}return a.sort((x,y)=>x.a.length-y.a.length||x.m-y.m)}
+function lab(s){return s.a.length?"{"+s.a.join(",")+"}":"∅"}
+function sub(a,b){return (a.m&b.m)===a.m}
+function levels(s){let L=[];for(let k=0;k<=n;k++)L.push(s.filter(x=>x.a.length===k));return L}
+function cover(lower,upper){let e=[];for(const a of lower)for(const b of upper)if(sub(a,b)&&b.a.length===a.a.length+1)e.push([a.m,b.m]);return e}
+function esc(x){return x.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}
+function graph(s, mode, completedLayerCount, selectedMasks=[]){
+  const L=levels(s), W=1000, H=470, pos=new Map();
+  L.forEach((lev,k)=>{
+    const y=H-42-k*(H-82)/Math.max(1,L.length-1);
+    const gap=W/(lev.length+1);
+    lev.forEach((x,i)=>pos.set(x.m,{x:gap*(i+1),y}));
+  });
+
+  let o=`<svg viewBox="0 0 ${W} ${H}">
+  <defs>
+    <marker id="arrowBlue" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#2f5fd0"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#9aa8bf"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#7250d9"/>
+    </marker>
+  </defs>`;
+
+  const visible=Math.min(completedLayerCount,L.length-1);
+
+  // Draw the complete subset relation: every A ⊆ B, including self-loops
+  // and all transitive relations. For layer-by-layer construction, only
+  // relations whose upper endpoint is already revealed are shown.
+  if(mode==="all"){
+    const visibleNodes=L.slice(0,visible+1).flat();
+    for(const a of visibleNodes){
+      for(const b of visibleNodes){
+        if(!sub(a,b)) continue;
+        const p=pos.get(a.m),q=pos.get(b.m);
+        if(a.m===b.m){
+          o+=`<path class="edge selfloop" d="M ${p.x+11} ${p.y-13}
+            C ${p.x+58} ${p.y-67}, ${p.x+65} ${p.y+44}, ${p.x+11} ${p.y+13}"
+            marker-end="url(#arrowPurple)"/>`;
+        } else {
+          const immediate=(b.a.length===a.a.length+1);
+          o+=`<line class="edge ${immediate?'cover':'trans'}"
+            x1="${p.x}" y1="${p.y-20}" x2="${q.x}" y2="${q.y+20}"
+            marker-end="url(#${immediate?'arrowBlue':'arrowGray'})"/>`;
+        }
+      }
+    }
+  }
+
+  // Remove self-loops, but keep ALL non-reflexive subset relations,
+  // including transitive relations.
+  if(mode==="noLoops"){
+    const visibleNodes=L.slice(0,visible+1).flat();
+    for(const a of visibleNodes){
+      for(const b of visibleNodes){
+        if(a.m===b.m || !sub(a,b)) continue;
+        const p=pos.get(a.m),q=pos.get(b.m);
+        const immediate=(b.a.length===a.a.length+1);
+        o+=`<line class="edge ${immediate?'cover':'trans'}"
+          x1="${p.x}" y1="${p.y-20}" x2="${q.x}" y2="${q.y+20}"
+          marker-end="url(#${immediate?'arrowBlue':'arrowGray'})"/>`;
+      }
+    }
+  }
+
+  // Remove transitive relations: retain only cover relations.
+  if(mode==="cover"){
+    for(let k=1;k<=visible;k++){
+      const E=cover(L[k-1],L[k]);
+      for(const [a,b] of E){
+        const p=pos.get(a),q=pos.get(b);
+        o+=`<line class="edge cover" x1="${p.x}" y1="${p.y-20}"
+          x2="${q.x}" y2="${q.y+20}" marker-end="url(#arrowBlue)"/>`;
+      }
+    }
+  }
+
+  // Nodes are revealed layer by layer.
+  for(let k=0;k<=visible;k++){
+    for(const x of L[k]){
+      const p=pos.get(x.m);
+      const cl=selectedMasks.includes(x.m)?" sel":"";
+      o+=`<g class="node${cl}" data-m="${x.m}" transform="translate(${p.x},${p.y})">
+        <circle r="22"></circle><text>${esc(lab(x))}</text></g>`;
+    }
+  }
+  o+="</svg>";
+  return o;
+}
+
+function render(){
+  const s=subs(n), L=levels(s);
+  $("steps").innerHTML=stages.map((x,i)=>
+    `<div class="step ${i===stage?'on':''}">${x}</div>`).join("");
+
+  let h=`<div class="card">
+    <span class="badge">B${n} = (2<sup>[${n}]</sup>, ⊆)</span>`;
+
+  if(stage===0){
+    h+=`<h2>1. Start with the set</h2>
+      <p class="text">We begin with the ground set [${n}]. Every subset will become a vertex of the Boolean lattice.</p>
+      <div class="math">[${n}] = {${Array.from({length:n},(_,i)=>i+1).join(", ")}}</div>
+      <div class="call"><b>Question:</b> How many subsets can we form?</div>`;
+  }
+
+  if(stage===1){
+    h+=`<h2>2. Generate the power set</h2>
+      <p class="text">Each element has two choices: include it or leave it out.</p>
+      <div class="math">|2<sup>[${n}]</sup>| = 2<sup>${n}</sup> = ${s.length}</div>
+      <div class="sets">${s.map(x=>`<span class="set">${esc(lab(x))}</span>`).join("")}</div>
+      <div class="call"><b>Observation:</b> the elements of the power set are themselves sets.</div>`;
+  }
+
+  if(stage===2){
+    h+=`<h2>3. Arrange the subsets by size</h2>
+      <p class="text">A subset with fewer elements is placed lower, while a subset with more elements is placed higher.</p>
+      <div class="math">Level 0 → ∅ &nbsp;&nbsp; Level 1 → one-element subsets &nbsp;&nbsp; … &nbsp;&nbsp; Level ${n} → [${n}]</div>
+      <div class="mini">`;
+    L.forEach((lev,k)=>{
+      h+=`<div class="mini-card"><b>Level ${k}</b>${lev.map(x=>esc(lab(x))).join(" &nbsp; ")}</div>`;
+    });
+    h+=`</div>
+      <div class="call"><b>Next:</b> Now we connect every pair of subsets that satisfies A ⊆ B.</div>`;
+  }
+
+  if(stage===3){
+    const maxLayers=L.length-1;
+    const unlocked=Math.min(layer,maxLayers);
+    h+=`<h2>4. Build All Subset Relations</h2>
+      <p class="text">At this stage we deliberately keep <b>every</b> relation A ⊆ B — including self-loops and relations implied by transitivity.</p>
+      <div class="math"><b>Current:</b> ${unlocked===0?"Bottom layer ∅":`Layers 0 through ${unlocked}`}</div>
+      <div class="graph">${graph(s,"all",unlocked)}</div>
+      <div class="actions">
+        <button id="addLayer" class="primary" ${unlocked===maxLayers?"disabled":""}>
+          ${unlocked===maxLayers?"All layers added":"Add next layer →"}
+        </button>
+        <button id="resetLayers" ${unlocked===0?"disabled":""}>Reset layers</button>
+      </div>
+      <div class="call"><b>Important:</b> this is the complete relation ⊆, not yet the Hasse diagram.</div>`;
+  }
+
+  if(stage===4){
+    h+=`<h2>5. Remove Self-Loops</h2>
+      <p class="text">A Hasse diagram does not display the reflexive relation A ⊆ A. We remove only the self-loops for now.</p>
+      <div class="graph">${graph(s,"noLoops",L.length-1)}</div>
+      <div class="call"><b>Notice:</b> all non-reflexive subset relations are still present, including transitive relations.</div>`;
+  }
+
+  if(stage===5){
+    h+=`<h2>6. Remove Transitive Relations</h2>
+      <p class="text">Now remove a relation A → C whenever it is already implied by A ⊆ B ⊆ C. Keep only the immediate subset relations.</p>
+      <div class="graph">${graph(s,"cover",L.length-1)}</div>
+      <div class="call"><b>What remains?</b> The cover relations — exactly the edges used in the Hasse diagram.</div>`;
+  }
+
+  if(stage===6){
+    h+=`<h2>7. Complete the Hasse Diagram</h2>
+      <p class="text">The simplification is complete: self-loops and transitive relations are gone, leaving the essential order structure.</p>
+      <div class="graph">${graph(s,"cover",L.length-1)}</div>
+      <div class="math"><b>B<sub>${n}</sub> = (2<sup>[${n}]</sup>, ⊆)</b> &nbsp;&nbsp; |B<sub>${n}</sub>| = 2<sup>${n}</sup> = ${s.length}</div>
+      <div class="call"><b>Next:</b> Use this completed diagram to identify least, greatest, minimal, and maximal elements.</div>`;
+  }
+
+  if(stage===7){
+    const least=s.find(x=>x.m===0);
+    const greatest=s.find(x=>x.m===(1<<n)-1);
+    h+=`<h2>8. Explore Poset Terminology</h2>
+      <p class="text">Now read the completed Hasse diagram as a poset.</p>
+      <div class="term-grid">
+        <div class="term"><b>Least element</b><span>${esc(lab(least))}</span><small>below every element</small></div>
+        <div class="term"><b>Greatest element</b><span>${esc(lab(greatest))}</span><small>above every element</small></div>
+        <div class="term"><b>Minimal element(s)</b><span>${esc(lab(least))}</span><small>nothing strictly below</small></div>
+        <div class="term"><b>Maximal element(s)</b><span>${esc(lab(greatest))}</span><small>nothing strictly above</small></div>
+      </div>
+      <div class="graph">${graph(s,"cover",L.length-1,selected)}</div>
+      <div class="call"><b>Explore:</b> click two nodes to test whether they are comparable or incomparable.</div>
+      <div class="status" id="status"></div>`;
+  }
+
+  h+=`<div class="actions">
+    <button id="p2" ${stage===0?"disabled":""}>← Previous</button>
+    <button id="n2" class="primary" ${stage===7?"disabled":""}>Next →</button>
+  </div></div>`;
+
+  $("app").innerHTML=h;
+  $("prev").disabled=stage===0;
+  $("next").disabled=stage===7;
+
+  $("p2").onclick=()=>{if(stage>0){stage--;selected=[];render()}};
+  $("n2").onclick=()=>{
+    if(stage===3 && layer<L.length-1){
+      layer++;
+      render();
+    } else if(stage===3 && layer===L.length-1){
+      stage++;
+      selected=[];
+      render();
+    } else if(stage<7){
+      stage++;
+      selected=[];
+      render();
+    }
+  };
+
+  // These controls are recreated on every render, so attach their
+  // listeners immediately after inserting the new HTML.  This avoids
+  // relying on inline onclick handlers or global functions.
+  const addLayerBtn = $("addLayer");
+  if(addLayerBtn){
+    addLayerBtn.addEventListener("click",()=>{
+      const maxLayer = levels(subs(n)).length - 1;
+      if(stage===3 && layer < maxLayer){
+        layer++;
+        selected=[];
+        render();
+      }
+    });
+  }
+
+  const resetLayerBtn = $("resetLayers");
+  if(resetLayerBtn){
+    resetLayerBtn.addEventListener("click",()=>{
+      if(stage===3){
+        layer=0;
+        selected=[];
+        render();
+      }
+    });
+  }
+
+  document.querySelectorAll(".node").forEach(e=>{
+    e.addEventListener("click",()=>pick(+e.dataset.m));
+  });
+}
+
+function pick(m){if(stage!==7)return;if(selected.includes(m))selected=selected.filter(x=>x!==m);else{if(selected.length===2)selected=[];selected.push(m)}render();if(selected.length===2){let s=subs(n),a=s.find(x=>x.m===selected[0]),b=s.find(x=>x.m===selected[1]),ok=sub(a,b)||sub(b,a);$("status").textContent=ok?"✓ Comparable":"✗ Incomparable"}}
+$("n").onchange=e=>{n=+e.target.value;stage=0;layer=0;selected=[];render()};
+$("restart").onclick=()=>{stage=0;layer=0;selected=[];render()};
+$("prev").onclick=()=>{
+  if(stage===3 && layer>0){layer--;selected=[];render();}
+  else if(stage>0){stage--;layer=0;selected=[];render();}
+};
+$("next").onclick=()=>{
+  const L=levels(subs(n));
+  if(stage===3 && layer<L.length-1){layer++;selected=[];render();}
+  else if(stage===3 && layer===L.length-1){stage++;selected=[];render();}
+  else if(stage<7){stage++;selected=[];render();}
+};
+render();
+</script>
+</body></html>
