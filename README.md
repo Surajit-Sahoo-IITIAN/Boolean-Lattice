@@ -1,7 +1,7 @@
 # From Power Set to Boolean Lattice
 
 An interactive visualization for **Discrete Mathematics & Graph Theory** that shows how the power set of a set becomes a Boolean lattice (a poset under subset inclusion).
-
+Click For Visualization (https://surajit-sahoo-iitian.github.io/Boolean-Lattice/)
 ## What students can explore
 
 Choose \(B_1\), \(B_2\), \(B_3\), or \(B_4\) and move through the construction step by step:
